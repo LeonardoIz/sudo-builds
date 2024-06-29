@@ -1,0 +1,95 @@
+name: Build & Release
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/**"
+
+jobs:
+  build-and-release:
+    name: Build & Release
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          repository: microsoft/sudo
+
+      - name: Get commit hash from Sudo repo
+        id: get-sha
+        run: echo "sha=$(git rev-parse HEAD)" | Out-File -FilePath $env:GITHUB_OUTPUT
+
+      - name: Create needed folder
+        run: mkdir builds
+
+      - name: Clean build directory
+        run: cargo clean
+
+      - name: Setup rust toolchain (x86_64-pc-windows-msvc)
+        run: |
+          rustup target add x86_64-pc-windows-msvc
+          rustup update --no-self-update nightly
+          rustup default nightly-x86_64-pc-windows-msvc
+          rustup override set nightly-x86_64-pc-windows-msvc
+          rustup component add rustfmt clippy
+
+      - name: Build (x86_64-pc-windows-msvc Inbox)
+        run: |
+          cargo build --release --target x86_64-pc-windows-msvc --features Inbox -Z unstable-options --artifact-dir target/x86_64-pc-windows-msvc-Inbox/release
+          cd target/x86_64-pc-windows-msvc-Inbox/release
+          powershell Compress-Archive -Path * -DestinationPath ../../../builds/ms-sudo-x86_64-pc-windows-msvc-Inbox.zip
+
+      - name: Build (x86_64-pc-windows-msvc Stable)
+        run: |
+          cargo build --release --target x86_64-pc-windows-msvc --features Stable -Z unstable-options --artifact-dir target/x86_64-pc-windows-msvc-Stable/release
+          cd target/x86_64-pc-windows-msvc-Stable/release
+          powershell Compress-Archive -Path * -DestinationPath ../../../builds/ms-sudo-x86_64-pc-windows-msvc-Stable.zip
+
+      - name: Build (x86_64-pc-windows-msvc Dev)
+        run: |
+          cargo build --release --target x86_64-pc-windows-msvc --features Dev -Z unstable-options --artifact-dir target/x86_64-pc-windows-msvc-Dev/release
+          cd target/x86_64-pc-windows-msvc-Dev/release
+          powershell Compress-Archive -Path * -DestinationPath ../../../builds/ms-sudo-x86_64-pc-windows-msvc-Dev.zip
+
+      - name: Setup rust toolchain (i686-pc-windows-msvc)
+        run: |
+          rustup target add i686-pc-windows-msvc
+          rustup update --no-self-update nightly
+          rustup default nightly-i686-pc-windows-msvc
+          rustup override set nightly-i686-pc-windows-msvc
+          rustup component add rustfmt clippy
+
+      - name: Build (i686-pc-windows-msvc Inbox)
+        run: |
+          cargo build --release --target i686-pc-windows-msvc --features Inbox -Z unstable-options --artifact-dir target/i686-pc-windows-msvc-Inbox/release
+          cd target/i686-pc-windows-msvc-Inbox/release
+          powershell Compress-Archive -Path * -DestinationPath ../../../builds/ms-sudo-i686-pc-windows-msvc-Inbox.zip
+
+      - name: Build (i686-pc-windows-msvc Stable)
+        run: |
+          cargo build --release --target i686-pc-windows-msvc --features Stable -Z unstable-options --artifact-dir target/i686-pc-windows-msvc-Stable/release
+          cd target/i686-pc-windows-msvc-Stable/release
+          powershell Compress-Archive -Path * -DestinationPath ../../../builds/ms-sudo-i686-pc-windows-msvc-Stable.zip
+
+      - name: Build (i686-pc-windows-msvc Dev)
+        run: |
+          cargo build --release --target i686-pc-windows-msvc --features Dev -Z unstable-options --artifact-dir target/i686-pc-windows-msvc-Dev/release
+          cd target/i686-pc-windows-msvc-Dev/release
+          powershell Compress-Archive -Path * -DestinationPath ../../../builds/ms-sudo-i686-pc-windows-msvc-Dev.zip
+
+      - name: Upload all artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ms-sudo-allbuilds-${{ steps.get-sha.outputs.sha }}
+          path: target/*/release
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            builds/*.zip
+          tag_name: ms-sudo-build-${{ steps.get-sha.outputs.sha }}
+          name: Sudo builds from ${{ steps.get-sha.outputs.sha }}
+          token: ${{ secrets.GH_TOKEN }}
